@@ -4,6 +4,25 @@ A full-stack network diagnostics API with a real-time browser dashboard. Built w
 
 ---
 
+## 📸 Screenshots
+
+### 🖼️ Dashboard Overview
+![Dashboard](assets/dashboard.png)
+
+### 🔐 Login Page
+![Login](assets/login.png)
+
+### 📡 Real-time Diagnostics
+![Diagnostics](assets/diagnostics.png)
+
+### 📋 Diagnostic Logs
+![Logs](assets/logs.png)
+
+### 🚨 Active Alerts
+![Alerts](assets/alerts.png)
+
+---
+
 ## ✨ Features
 
 | Category | Features |
