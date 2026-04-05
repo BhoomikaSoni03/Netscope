@@ -44,6 +44,12 @@ A full-stack network diagnostics API with a real-time browser dashboard. Built w
 
 ```
 netscope/
+├──assets                   # UI representaion of the project
+│   └── alerts.png          
+│   └── dashboard.png
+│   └── diagnostics.png
+│   └── login.png
+│   └── logs.png
 ├── public/
 │   └── index.html          # Browser dashboard (served by Express)
 ├── src/
@@ -141,24 +147,7 @@ npm run dev
 GET /health  →  200 { success, service, version, timestamp }
 ```
 
----
-
-## 🔑 Environment Variables
-
-```env
-PORT=5001
-
-# Local
-MONGO_URI=mongodb://localhost:27017/netscope
-REDIS_URL=redis://localhost:6379
-
-# Auth — MUST change before production!
-# Generate: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-JWT_SECRET=your_secret_here
-JWT_EXPIRES_IN=7d
-```
-
----
+ 
 
 ## 🐳 Docker Commands
 
