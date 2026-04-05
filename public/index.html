@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetScope — Network Diagnostic Dashboard</title>
+  <meta name="description" content="NetScope: real-time network diagnostics, ping, TCP checks, DNS lookup, alerts and multi-check." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#080c14;--surface:#0d1421;--surface2:#131d2e;--border:#1e2d45;
+      --accent:#00d4ff;--accent2:#7c3aed;--success:#10b981;--danger:#ef4444;
+      --warning:#f59e0b;--text:#e2e8f0;--muted:#64748b;
+      --glow:0 0 20px rgba(0,212,255,.15);
+    }
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+    body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);background-size:50px 50px;pointer-events:none;z-index:0}
+
+    /* ── AUTH ── */
+    #auth-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:100;background:var(--bg)}
+    #auth-screen.hidden{display:none}
+    .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;width:100%;max-width:420px;box-shadow:0 0 60px rgba(0,212,255,.08),0 20px 60px rgba(0,0,0,.5);position:relative;overflow:hidden}
+    .auth-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent)}
+    .logo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
+    .logo-text{font-size:22px;font-weight:700;letter-spacing:-.5px}
+    .logo-sub{font-size:12px;color:var(--muted);margin-bottom:28px}
+    .tabs{display:flex;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:22px}
+    .tab-btn{flex:1;padding:8px;border:none;background:transparent;color:var(--muted);border-radius:7px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;transition:all .2s}
+    .tab-btn.active{background:var(--accent);color:#000}
+    .form-group{margin-bottom:14px}
+    label{font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+    input,select,textarea{width:100%;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:inherit;font-size:14px;transition:border-color .2s,box-shadow .2s;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,255,.1)}
+    .btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),#0090b8);border:none;border-radius:10px;color:#000;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .15s;margin-top:6px}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 8px 25px rgba(0,212,255,.3)}
+    .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .auth-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#fca5a5;margin-bottom:14px;display:none}
+    .auth-error.show{display:block}
+
+    /* ── DASHBOARD ── */
+    #dashboard{display:none;min-height:100vh;position:relative;z-index:1}
+    #dashboard.show{display:flex}
+    .sidebar{width:230px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 14px;position:fixed;top:0;left:0;bottom:0;z-index:10}
+    .sidebar-logo{display:flex;align-items:center;gap:9px;padding:0 6px;margin-bottom:28px}
+    .sidebar-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+    .sidebar-logo-text{font-size:17px;font-weight:700}
+    .nav-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin:14px 0 6px}
+    .nav-item{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:9px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;transition:all .15s;border:none;background:transparent;width:100%;text-align:left;font-family:inherit}
+    .nav-item:hover{background:var(--surface2);color:var(--text)}
+    .nav-item.active{background:rgba(0,212,255,.1);color:var(--accent)}
+    .nav-item .icon{font-size:15px;width:18px;text-align:center}
+    .alert-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;min-width:18px;text-align:center}
+    .sidebar-user{margin-top:auto;padding:11px;background:var(--surface2);border-radius:11px;border:1px solid var(--border)}
+    .user-name{font-size:13px;font-weight:600}
+    .user-email{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-all}
+    .logout-btn{width:100%;margin-top:8px;padding:6px;background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s}
+    .logout-btn:hover{border-color:var(--danger);color:var(--danger)}
+    .main{flex:1;margin-left:230px;padding:28px;overflow-y:auto}
+    .page{display:none}
+    .page.active{display:block}
+    .page-header{margin-bottom:24px}
+    .page-title{font-size:24px;font-weight:700;letter-spacing:-.5px}
+    .page-subtitle{font-size:13px;color:var(--muted);margin-top:3px}
+
+    /* stats */
+    .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:default}
+    .stat-card:hover{transform:translateY(-2px);box-shadow:var(--glow)}
+    .stat-card::after{content:'';position:absolute;top:0;right:0;width:55px;height:55px;border-radius:0 13px 0 55px;opacity:.12}
+    .stat-card.cyan::after{background:var(--accent)} .stat-card.purple::after{background:var(--accent2)}
+    .stat-card.green::after{background:var(--success)} .stat-card.amber::after{background:var(--warning)}
+    .stat-card.red::after{background:var(--danger)}
+    .stat-label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:7px}
+    .stat-value{font-size:30px;font-weight:700}
+    .stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+    /* tool cards */
+    .tool-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-bottom:24px}
+    .tool-card{background:var(--surface);border:1px solid var(--border);border-radius:15px;padding:22px;transition:box-shadow .2s}
+    .tool-card:hover{box-shadow:var(--glow)}
+    .tool-card-header{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+    .tool-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+    .tool-icon.cyan{background:rgba(0,212,255,.15)} .tool-icon.purple{background:rgba(124,58,237,.15)} .tool-icon.green{background:rgba(16,185,129,.15)} .tool-icon.amber{background:rgba(245,158,11,.15)}
+    .tool-name{font-size:15px;font-weight:600}
+    .tool-desc{font-size:12px;color:var(--muted)}
+
+    /* inputs */
+    .input-row{display:flex;gap:8px}
+    .input-row input{flex:1}
+    .input-row .port-in{width:86px;flex:none}
+    .run-btn{padding:11px 18px;background:linear-gradient(135deg,var(--accent),#0090b8);border:none;border-radius:9px;color:#000;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0}
+    .run-btn:hover{box-shadow:0 4px 15px rgba(0,212,255,.3);transform:translateY(-1px)}
+    .run-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+    /* result panel */
+    .result-panel{margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;overflow:hidden;display:none}
+    .result-panel.show{display:block}
+    .result-header{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .result-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+    .dot{width:7px;height:7px;border-radius:50%}
+    .dot.success{background:var(--success);box-shadow:0 0 5px var(--success)}
+    .dot.danger{background:var(--danger);box-shadow:0 0 5px var(--danger)}
+    .dot.loading{background:var(--warning);animation:pulse 1s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    pre.result-json{padding:13px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#94d8f0;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow-y:auto;line-height:1.65}
+    .cache-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:var(--warning);padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600}
+
+    /* multi-check */
+    .multi-results{margin-top:14px;display:none}
+    .multi-results.show{display:block}
+    .multi-header{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:var(--surface2);border-radius:9px 9px 0 0;border:1px solid var(--border);border-bottom:none;font-size:11px;font-weight:600;text-transform:uppercase}
+    .multi-row{padding:10px 14px;border:1px solid var(--border);border-top:none;font-size:13px;display:flex;align-items:center;gap:12px;transition:background .1s}
+    .multi-row:last-child{border-radius:0 0 9px 9px}
+    .multi-row:hover{background:var(--surface2)}
+    .multi-target{font-family:'JetBrains Mono',monospace;flex:1;font-size:12px}
+    .multi-latency{color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace}
+
+    /* logs */
+    .logs-toolbar{display:flex;gap:9px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+    .filter-select{padding:8px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;cursor:pointer}
+    .filter-select:focus{border-color:var(--accent)}
+    .icon-btn{padding:8px 13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;transition:all .15s}
+    .icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .icon-btn.red:hover{border-color:var(--danger);color:var(--danger)}
+    .logs-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:13px;overflow:hidden}
+    table{width:100%;border-collapse:collapse}
+    th{padding:11px 14px;background:var(--surface2);font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;text-align:left}
+    td{padding:11px 14px;font-size:13px;border-top:1px solid var(--border);vertical-align:middle}
+    tr:hover td{background:var(--surface2)}
+    .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
+    .badge-ping{background:rgba(0,212,255,.15);color:var(--accent)}
+    .badge-tcp{background:rgba(124,58,237,.15);color:#a78bfa}
+    .badge-dns{background:rgba(16,185,129,.15);color:var(--success)}
+    .badge-success{background:rgba(16,185,129,.15);color:var(--success)}
+    .badge-failed,.badge-failure{background:rgba(239,68,68,.15);color:var(--danger)}
+    .badge-timeout{background:rgba(245,158,11,.15);color:var(--warning)}
+    .mono{font-family:'JetBrains Mono',monospace}
+    .del-btn{padding:3px 9px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s}
+    .del-btn:hover{border-color:var(--danger);color:var(--danger)}
+    .empty-state{padding:50px 20px;text-align:center;color:var(--muted)}
+    .empty-state .icon{font-size:42px;margin-bottom:10px}
+    .empty-state p{font-size:14px}
+
+    /* alerts */
+    .alert-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:16px 20px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px;position:relative;transition:box-shadow .2s}
+    .alert-card.triggered{border-color:rgba(239,68,68,.4);box-shadow:0 0 20px rgba(239,68,68,.08)}
+    .alert-card.ok{border-color:rgba(16,185,129,.3)}
+    .alert-icon{font-size:22px;flex-shrink:0;margin-top:2px}
+    .alert-title{font-size:14px;font-weight:600;margin-bottom:3px}
+    .alert-meta{font-size:12px;color:var(--muted)}
+    .alert-dismiss{position:absolute;top:12px;right:14px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px;transition:color .15s}
+    .alert-dismiss:hover{color:var(--danger)}
+
+    /* pagination */
+    .pagination{display:flex;align-items:center;gap:7px;justify-content:center;margin-top:18px}
+    .page-btn{padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--muted);font-size:13px;cursor:pointer;transition:all .15s;font-family:inherit}
+    .page-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .page-btn.active{background:rgba(0,212,255,.15);border-color:var(--accent);color:var(--accent)}
+    .page-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* toast */
+    #toast{position:fixed;bottom:22px;right:22px;padding:11px 18px;border-radius:11px;font-size:14px;font-weight:500;opacity:0;transform:translateY(8px);transition:all .3s;z-index:9999;pointer-events:none}
+    #toast.show{opacity:1;transform:translateY(0)}
+    #toast.success{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:#6ee7b7}
+    #toast.error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#fca5a5}
+    #toast.info{background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);color:var(--accent)}
+
+    /* scrollbar */
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+    /* section divider */
+    .section-title{font-size:15px;font-weight:600;margin:22px 0 12px;display:flex;align-items:center;gap:8px}
+    .section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+  </style>
+</head>
+<body>
+
+<!-- ═══ AUTH ═══ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="logo"><div class="logo-icon">🛰️</div><span class="logo-text">NetScope</span></div>
+    <p class="logo-sub">Network Diagnostic & Monitoring Platform</p>
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Login</button>
+      <button class="tab-btn" id="tab-register" onclick="switchTab('register')">Register</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <div id="login-form">
+      <div class="form-group"><label>Email</label><input type="email" id="l-email" placeholder="you@example.com" /></div>
+      <div class="form-group"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" /></div>
+      <button class="btn" id="login-btn" onclick="handleLogin()">Login</button>
+    </div>
+    <div id="register-form" style="display:none">
+      <div class="form-group"><label>Username</label><input type="text" id="r-name" placeholder="your_username" /></div>
+      <div class="form-group"><label>Email</label><input type="email" id="r-email" placeholder="you@example.com" /></div>
+      <div class="form-group"><label>Password</label><input type="password" id="r-pass" placeholder="Min 6 chars" /></div>
+      <button class="btn" id="register-btn" onclick="handleRegister()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ═══ -->
+<div id="dashboard">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="sidebar-logo-icon">🛰️</div><span class="sidebar-logo-text">NetScope</span></div>
+    <span class="nav-label">Navigation</span>
+    <button class="nav-item active" onclick="showPage('overview')" id="nav-overview"><span class="icon">📊</span>Overview</button>
+    <button class="nav-item" onclick="showPage('tools')" id="nav-tools"><span class="icon">🔧</span>Diagnostics</button>
+    <button class="nav-item" onclick="showPage('multi')" id="nav-multi"><span class="icon">⚡</span>Multi-Check</button>
+    <button class="nav-item" onclick="showPage('logs')" id="nav-logs"><span class="icon">📋</span>Logs</button>
+    <button class="nav-item" onclick="showPage('alerts')" id="nav-alerts"><span class="icon">🚨</span>Alerts<span class="alert-badge" id="alert-badge" style="display:none">0</span></button>
+    <div class="sidebar-user">
+      <div class="user-name" id="sb-name">—</div>
+      <div class="user-email" id="sb-email">—</div>
+      <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="page-header"><h1 class="page-title">Overview</h1><p class="page-subtitle">Your network diagnostics at a glance</p></div>
+      <div class="stats-row">
+        <div class="stat-card cyan"><div class="stat-label">Total Checks</div><div class="stat-value" id="st-total">—</div><div class="stat-sub">All time</div></div>
+        <div class="stat-card green"><div class="stat-label">Successful</div><div class="stat-value" id="st-ok">—</div><div class="stat-sub">status: success</div></div>
+        <div class="stat-card amber"><div class="stat-label">Failed / Timeout</div><div class="stat-value" id="st-fail">—</div><div class="stat-sub">Needs attention</div></div>
+        <div class="stat-card purple"><div class="stat-label">Cached Hits</div><div class="stat-value" id="st-cache">—</div><div class="stat-sub">Redis saves</div></div>
+        <div class="stat-card red"><div class="stat-label">Active Alerts</div><div class="stat-value" id="st-alerts">—</div><div class="stat-sub">Consecutive fails ≥3</div></div>
+      </div>
+      <h2 class="section-title">Recent Activity</h2>
+      <div class="logs-table-wrap">
+        <table><thead><tr><th>Type</th><th>Target</th><th>Status</th><th>Time</th></tr></thead>
+        <tbody id="recent-body"><tr><td colspan="4"><div class="empty-state"><div class="icon">🔍</div><p>No activity yet</p></div></td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- DIAGNOSTICS -->
+    <div class="page" id="page-tools">
+      <div class="page-header"><h1 class="page-title">Diagnostics</h1><p class="page-subtitle">Run network checks in real-time</p></div>
+      <div class="tool-grid">
+        <!-- Ping -->
+        <div class="tool-card">
+          <div class="tool-card-header"><div class="tool-icon cyan">📡</div><div><div class="tool-name">Ping</div><div class="tool-desc">Latency, jitter, packet loss, stability</div></div></div>
+          <div class="input-row"><input type="text" id="ping-t" placeholder="google.com or 8.8.8.8" /><button class="run-btn" id="ping-btn" onclick="runPing()">▶ Run</button></div>
+          <div class="result-panel" id="ping-r"><div class="result-header"><span>Result</span><span class="result-status" id="ping-st"></span></div><pre class="result-json" id="ping-j"></pre></div>
+        </div>
+        <!-- TCP -->
+        <div class="tool-card">
+          <div class="tool-card-header"><div class="tool-icon purple">🔌</div><div><div class="tool-name">TCP Port Check</div><div class="tool-desc">Open/closed + service hint + response time</div></div></div>
+          <div class="input-row"><input type="text" id="tcp-h" placeholder="google.com" /><input type="number" id="tcp-p" class="port-in" placeholder="443" /><button class="run-btn" id="tcp-btn" onclick="runTcp()">▶ Run</button></div>
+          <div class="result-panel" id="tcp-r"><div class="result-header"><span>Result</span><span class="result-status" id="tcp-st"></span></div><pre class="result-json" id="tcp-j"></pre></div>
+        </div>
+        <!-- DNS -->
+        <div class="tool-card">
+          <div class="tool-card-header"><div class="tool-icon green">🌐</div><div><div class="tool-name">DNS Lookup</div><div class="tool-desc">A/AAAA/MX/NS/TXT/CNAME + TTL</div></div></div>
+          <div class="input-row"><input type="text" id="dns-h" placeholder="github.com" /><button class="run-btn" id="dns-btn" onclick="runDns()">▶ Run</button></div>
+          <div class="result-panel" id="dns-r"><div class="result-header"><span>Result</span><span class="result-status" id="dns-st"></span></div><pre class="result-json" id="dns-j"></pre></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MULTI-CHECK -->
+    <div class="page" id="page-multi">
+      <div class="page-header"><h1 class="page-title">Multi-Check</h1><p class="page-subtitle">Check up to 10 hosts in parallel at once</p></div>
+      <div class="tool-card" style="max-width:680px">
+        <div class="tool-card-header"><div class="tool-icon amber">⚡</div><div><div class="tool-name">Parallel Diagnostics</div><div class="tool-desc">Enter comma-separated hosts — all run simultaneously</div></div></div>
+        <div class="form-group">
+          <label>Targets (comma-separated)</label>
+          <textarea id="multi-targets" rows="3" placeholder="google.com, github.com, aws.amazon.com" style="resize:vertical"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:0">
+          <div class="form-group" style="flex:1;margin-bottom:0">
+            <label>Check Type</label>
+            <select id="multi-type">
+              <option value="ping">Ping</option>
+              <option value="tcp">TCP Port</option>
+              <option value="dns">DNS Lookup</option>
+            </select>
+          </div>
+          <div class="form-group" style="width:110px;margin-bottom:0" id="multi-port-wrap">
+            <label>Port</label>
+            <input type="number" id="multi-port" value="443" min="1" max="65535" />
+          </div>
+        </div>
+        <button class="run-btn" id="multi-btn" onclick="runMulti()" style="width:100%;margin-top:14px;padding:13px">⚡ Run All</button>
+
+        <div class="multi-results" id="multi-r">
+          <div class="multi-header">
+            <span>Results</span>
+            <span id="multi-summary" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+          <div id="multi-rows"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="page" id="page-logs">
+      <div class="page-header"><h1 class="page-title">Logs</h1><p class="page-subtitle">Full diagnostic history with filters</p></div>
+      <div class="logs-toolbar">
+        <select class="filter-select" id="f-type" onchange="loadLogs(1)">
+          <option value="">All Types</option><option value="ping">Ping</option><option value="tcp">TCP</option><option value="dns">DNS</option>
+        </select>
+        <select class="filter-select" id="f-status" onchange="loadLogs(1)">
+          <option value="">All Statuses</option><option value="success">Success</option><option value="failed">Failed</option><option value="failure">Failure</option><option value="timeout">Timeout</option>
+        </select>
+        <select class="filter-select" id="f-since" onchange="loadLogs(1)">
+          <option value="">All Time</option><option value="24h">Last 24h</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option>
+        </select>
+        <button class="icon-btn" onclick="loadLogs(currentPage)">↻ Refresh</button>
+        <button class="icon-btn red" onclick="clearLogs()" style="margin-left:auto">🗑 Clear All</button>
+      </div>
+      <div class="logs-table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Target</th><th>Port</th><th>Status</th><th>Cache</th><th>Time</th><th></th></tr></thead>
+          <tbody id="logs-body"><tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>No logs found</p></div></td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- ALERTS -->
+    <div class="page" id="page-alerts">
+      <div class="page-header"><h1 class="page-title">Alerts</h1><p class="page-subtitle">Fired when a host fails 3 consecutive ping checks</p></div>
+      <div id="alerts-list"><div class="empty-state"><div class="icon">✅</div><p>No alerts — all systems healthy!</p></div></div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let token = localStorage.getItem('ns_token') || null;
+let currentUser = JSON.parse(localStorage.getItem('ns_user') || 'null');
+let currentPage = 1;
+
+// ━━━ INIT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+window.onload = () => {
+  if (token && currentUser) showDashboard();
+  else showAuth();
+  document.getElementById('multi-type').addEventListener('change', e => {
+    document.getElementById('multi-port-wrap').style.display = e.target.value === 'tcp' ? '' : 'none';
+  });
+  document.getElementById('multi-port-wrap').style.display = 'none';
+  document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') handleLogin(); });
+  document.getElementById('dns-h').addEventListener('keydown', e => { if(e.key==='Enter') runDns(); });
+  document.getElementById('ping-t').addEventListener('keydown', e => { if(e.key==='Enter') runPing(); });
+  document.getElementById('tcp-p').addEventListener('keydown', e => { if(e.key==='Enter') runTcp(); });
+};
+
+// ━━━ AUTH ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function switchTab(t) {
+  ['login','register'].forEach(x => {
+    document.getElementById(x+'-form').style.display = x===t?'':'none';
+    document.getElementById('tab-'+x).classList.toggle('active', x===t);
+  });
+  document.getElementById('auth-error').classList.remove('show');
+}
+function authErr(m) { const e=document.getElementById('auth-error'); e.textContent=m; e.classList.add('show'); }
+
+async function handleLogin() {
+  const email=document.getElementById('l-email').value.trim(), pass=document.getElementById('l-pass').value;
+  if(!email||!pass) return authErr('Fill all fields');
+  const btn=document.getElementById('login-btn'); btn.disabled=true; btn.textContent='…';
+  document.getElementById('auth-error').classList.remove('show');
+  try {
+    const d = await post('/api/auth/login', { email, password: pass }, false);
+    if(!d.success) throw new Error(d.message);
+    save(d.token, d.user); showDashboard();
+  } catch(e) { authErr(e.message||'Login failed'); }
+  finally { btn.disabled=false; btn.textContent='Login'; }
+}
+
+async function handleRegister() {
+  const un=document.getElementById('r-name').value.trim(), em=document.getElementById('r-email').value.trim(), pw=document.getElementById('r-pass').value;
+  if(!un||!em||!pw) return authErr('Fill all fields');
+  const btn=document.getElementById('register-btn'); btn.disabled=true; btn.textContent='…';
+  document.getElementById('auth-error').classList.remove('show');
+  try {
+    const d = await post('/api/auth/register', { username:un, email:em, password:pw }, false);
+    if(!d.success) throw new Error(d.message);
+    save(d.token, d.user); showDashboard(); showToast('Account created 🎉','success');
+  } catch(e) { authErr(e.message||'Failed'); }
+  finally { btn.disabled=false; btn.textContent='Create Account'; }
+}
+
+function save(tok, user) { token=tok; currentUser=user; localStorage.setItem('ns_token',tok); localStorage.setItem('ns_user',JSON.stringify(user)); }
+function logout() { token=null; currentUser=null; localStorage.clear(); showAuth(); }
+function showAuth() { document.getElementById('auth-screen').classList.remove('hidden'); document.getElementById('dashboard').classList.remove('show'); }
+function showDashboard() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('show');
+  document.getElementById('sb-name').textContent = currentUser?.username||'User';
+  document.getElementById('sb-email').textContent = currentUser?.email||'';
+  loadOverview(); pollAlerts();
+}
+
+// ━━━ NAVIGATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  if(name==='overview') loadOverview();
+  if(name==='logs') loadLogs(1);
+  if(name==='alerts') loadAlerts();
+}
+
+// ━━━ HTTP HELPERS ━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function apiFetch(url, opts={}) {
+  const r = await fetch(API+url, { ...opts, headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}`, ...(opts.headers||{}) } });
+  const d = await r.json();
+  if(!d.success && r.status===401) { logout(); return null; }
+  return d;
+}
+async function post(url, body, auth=true) {
+  const headers = { 'Content-Type':'application/json' };
+  if(auth) headers['Authorization']=`Bearer ${token}`;
+  const r = await fetch(API+url, { method:'POST', headers, body: JSON.stringify(body) });
+  return r.json();
+}
+
+// ━━━ OVERVIEW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadOverview() {
+  const [ld, ad] = await Promise.all([
+    apiFetch('/api/logs?limit=100'),
+    apiFetch('/api/diagnostics/alerts')
+  ]);
+  if(!ld) return;
+  const logs = ld.data||[];
+  document.getElementById('st-total').textContent = ld.total ?? logs.length;
+  document.getElementById('st-ok').textContent = logs.filter(l=>l.status==='success').length;
+  document.getElementById('st-fail').textContent = logs.filter(l=>l.status!=='success').length;
+  document.getElementById('st-cache').textContent = logs.filter(l=>l.fromCache).length;
+  const activeAlerts = ad ? (ad.data||[]).filter(a=>a.triggered&&!a.resolved).length : 0;
+  document.getElementById('st-alerts').textContent = activeAlerts;
+
+  const recent = logs.slice(0,8);
+  const tb = document.getElementById('recent-body');
+  if(!recent.length) { tb.innerHTML=`<tr><td colspan="4"><div class="empty-state"><div class="icon">🔍</div><p>Run your first diagnostic!</p></div></td></tr>`; return; }
+  tb.innerHTML = recent.map(l=>`<tr><td><span class="badge badge-${l.type}">${l.type.toUpperCase()}</span></td><td class="mono" style="font-size:12px">${l.target}${l.port?':'+l.port:''}</td><td><span class="badge badge-${l.status}">${l.status}</span></td><td style="color:var(--muted);font-size:12px">${fmtDate(l.createdAt)}</td></tr>`).join('');
+}
+
+// ━━━ DIAGNOSTIC TOOLS ━━━━━━━━━━━━━━━━━━━━━━
+async function runPing() {
+  const t = document.getElementById('ping-t').value.trim();
+  if(!t) return showToast('Enter a target','error');
+  setLoading('ping',true); showResult('ping','loading','');
+  try {
+    const d = await apiFetch('/api/diagnostics/ping', { method:'POST', body:JSON.stringify({target:t}) });
+    if(!d) return;
+    showResult('ping', d.data?.status==='success'?'success':'failure', JSON.stringify(d,null,2), d.fromCache);
+    loadOverview();
+  } catch(e) { showResult('ping','failure',e.message); }
+  finally { setLoading('ping',false); }
+}
+
+async function runTcp() {
+  const h=document.getElementById('tcp-h').value.trim(), p=document.getElementById('tcp-p').value.trim();
+  if(!h||!p) return showToast('Enter host and port','error');
+  setLoading('tcp',true); showResult('tcp','loading','');
+  try {
+    const d = await apiFetch('/api/diagnostics/tcp', { method:'POST', body:JSON.stringify({host:h,port:Number(p)}) });
+    if(!d) return;
+    showResult('tcp', d.data?.status==='success'?'success':'failure', JSON.stringify(d,null,2), d.fromCache);
+    loadOverview();
+  } catch(e) { showResult('tcp','failure',e.message); }
+  finally { setLoading('tcp',false); }
+}
+
+async function runDns() {
+  const h = document.getElementById('dns-h').value.trim();
+  if(!h) return showToast('Enter a domain','error');
+  setLoading('dns',true); showResult('dns','loading','');
+  try {
+    const d = await apiFetch('/api/diagnostics/dns', { method:'POST', body:JSON.stringify({hostname:h}) });
+    if(!d) return;
+    showResult('dns', d.data?.status==='success'?'success':'failure', JSON.stringify(d,null,2), d.fromCache);
+    loadOverview();
+  } catch(e) { showResult('dns','failure',e.message); }
+  finally { setLoading('dns',false); }
+}
+
+function setLoading(tool, on) { const b=document.getElementById(tool+'-btn'); b.disabled=on; b.textContent=on?'⏳':'▶ Run'; }
+function showResult(tool, status, json, fromCache=false) {
+  const panel=document.getElementById(tool+'-r'), st=document.getElementById(tool+'-st'), je=document.getElementById(tool+'-j');
+  panel.classList.add('show'); je.textContent=json;
+  const labels={success:'Success',failure:'Failed',loading:'Running…',timeout:'Timeout'};
+  const dc=status==='loading'?'loading':status==='success'?'success':'danger';
+  const cb=fromCache?'<span class="cache-badge">⚡ Cached</span>':'';
+  st.innerHTML=`<span class="dot ${dc}"></span>${labels[status]||status} ${cb}`;
+}
+
+// ━━━ MULTI-CHECK ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function runMulti() {
+  const raw = document.getElementById('multi-targets').value;
+  const targets = raw.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!targets.length) return showToast('Enter at least one target','error');
+  if(targets.length>10) return showToast('Max 10 targets','error');
+  const type = document.getElementById('multi-type').value;
+  const port = document.getElementById('multi-port').value;
+  const btn = document.getElementById('multi-btn');
+  btn.disabled=true; btn.textContent='⏳ Running…';
+  try {
+    const d = await apiFetch('/api/diagnostics/multi', {
+      method:'POST',
+      body: JSON.stringify({ targets, type, port: port ? Number(port) : undefined })
+    });
+    if(!d) return;
+    const rEl = document.getElementById('multi-r');
+    const summary = d.summary || {};
+    document.getElementById('multi-summary').textContent = `${summary.success||0} ok / ${summary.failed||0} failed`;
+    const rows = (d.results||[]).map(r => {
+      const ok = r.status==='success';
+      const latency = r.latency || (r.responseTime) || (r.resolvedIn) || '—';
+      return `<div class="multi-row"><span style="font-size:15px">${ok?'✅':'❌'}</span><span class="multi-target">${r.target}</span><span class="badge badge-${r.status}">${r.status}</span><span class="multi-latency">${latency}</span></div>`;
+    }).join('');
+    document.getElementById('multi-rows').innerHTML = rows;
+    rEl.classList.add('show');
+    loadOverview();
+  } catch(e) { showToast(e.message,'error'); }
+  finally { btn.disabled=false; btn.textContent='⚡ Run All'; }
+}
+
+// ━━━ LOGS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadLogs(page=1) {
+  currentPage=page;
+  const type=document.getElementById('f-type').value;
+  const status=document.getElementById('f-status').value;
+  const since=document.getElementById('f-since').value;
+  let url=`/api/logs?page=${page}&limit=15`;
+  if(type) url+=`&type=${type}`;
+  if(status) url+=`&status=${status}`;
+  if(since) url+=`&since=${since}`;
+  const d = await apiFetch(url);
+  if(!d) return;
+  const logs=d.data||[], tb=document.getElementById('logs-body');
+  if(!logs.length) { tb.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>No logs found</p></div></td></tr>`; document.getElementById('pagination').innerHTML=''; return; }
+  tb.innerHTML=logs.map(l=>`<tr><td><span class="badge badge-${l.type}">${l.type.toUpperCase()}</span></td><td class="mono" style="font-size:12px">${l.target}</td><td class="mono" style="color:var(--muted);font-size:12px">${l.port||'—'}</td><td><span class="badge badge-${l.status}">${l.status}</span></td><td>${l.fromCache?'<span class="cache-badge">⚡</span>':'<span style="color:var(--muted);font-size:11px">—</span>'}</td><td style="color:var(--muted);font-size:12px">${fmtDate(l.createdAt)}</td><td><button class="del-btn" onclick="delLog('${l._id}')">✕</button></td></tr>`).join('');
+  buildPagination(page, d.pages||1);
+}
+async function delLog(id) { const d=await apiFetch(`/api/logs/${id}`,{method:'DELETE'}); if(d?.success){showToast('Deleted','success');loadLogs(currentPage);} }
+async function clearLogs() { if(!confirm('Delete ALL logs?')) return; const d=await apiFetch('/api/logs',{method:'DELETE'}); if(d?.success){showToast(d.message,'success');loadLogs(1);loadOverview();} }
+function buildPagination(page, pages) {
+  if(pages<=1){document.getElementById('pagination').innerHTML='';return;}
+  let h=`<button class="page-btn" onclick="loadLogs(${page-1})" ${page===1?'disabled':''}>‹</button>`;
+  for(let i=1;i<=pages;i++) h+=`<button class="page-btn ${i===page?'active':''}" onclick="loadLogs(${i})">${i}</button>`;
+  h+=`<button class="page-btn" onclick="loadLogs(${page+1})" ${page===pages?'disabled':''}>›</button>`;
+  document.getElementById('pagination').innerHTML=h;
+}
+
+// ━━━ ALERTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function loadAlerts() {
+  const d = await apiFetch('/api/diagnostics/alerts');
+  if(!d) return;
+  const el = document.getElementById('alerts-list');
+  const alerts = d.data||[];
+  updateAlertBadge(alerts.filter(a=>a.triggered&&!a.resolved).length);
+  if(!alerts.length) { el.innerHTML=`<div class="empty-state"><div class="icon">✅</div><p>No alerts — all systems healthy!</p></div>`; return; }
+  el.innerHTML = alerts.map(a => {
+    const triggered = a.triggered && !a.resolved;
+    return `<div class="alert-card ${triggered?'triggered':'ok'}">
+      <div class="alert-icon">${triggered?'🚨':'✅'}</div>
+      <div style="flex:1">
+        <div class="alert-title">${triggered?'ALERT':'Resolved'}: ${a.target}</div>
+        <div class="alert-meta">${a.message || (triggered ? `${a.consecutiveFailures} consecutive failures (threshold: ${a.threshold})` : 'Now healthy')}</div>
+        <div class="alert-meta" style="margin-top:4px">Last updated: ${fmtDate(a.updatedAt)}</div>
+      </div>
+      <button class="alert-dismiss" onclick="dismissAlert('${a._id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+async function dismissAlert(id) {
+  const d = await apiFetch(`/api/diagnostics/alerts/${id}`,{method:'DELETE'});
+  if(d?.success) { showToast('Alert dismissed','success'); loadAlerts(); loadOverview(); }
+}
+function updateAlertBadge(count) {
+  const b=document.getElementById('alert-badge');
+  if(count>0){b.textContent=count;b.style.display='';} else {b.style.display='none';}
+}
+async function pollAlerts() {
+  try {
+    const d = await apiFetch('/api/diagnostics/alerts');
+    if(d) updateAlertBadge((d.data||[]).filter(a=>a.triggered&&!a.resolved).length);
+  } catch{}
+  setTimeout(pollAlerts, 30000); // poll every 30s
+}
+
+// ━━━ UTILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function fmtDate(iso) {
+  if(!iso) return '—';
+  const d=new Date(iso);
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+function showToast(msg, type='success') {
+  const t=document.getElementById('toast');
+  t.textContent=(type==='success'?'✓  ':type==='error'?'✕  ':'ℹ  ')+msg;
+  t.className='show '+type;
+  setTimeout(()=>t.className='',3200);
+}
+</script>
+</body>
+</html>

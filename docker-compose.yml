@@ -1,0 +1,48 @@
+services:
+  # ── Node.js API ──────────────────────────────
+  app:
+    build: .
+    container_name: netscope-api
+    ports:
+      - '5001:5001'
+    environment:
+      - PORT=5001
+      - MONGO_URI=mongodb://mongo:27017/netscope
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-netscope_super_secret_change_this}
+      - JWT_EXPIRES_IN=7d
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+    networks:
+      - netscope-network
+
+  # ── MongoDB ──────────────────────────────────
+  mongo:
+    image: mongo:6.0
+    container_name: netscope-mongo
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    networks:
+      - netscope-network
+
+  # ── Redis ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: netscope-redis
+    ports:
+      - '6380:6379'   # host 6380 → container 6379 (avoids conflict with local Redis)
+    restart: unless-stopped
+    networks:
+      - netscope-network
+
+volumes:
+  mongo_data:
+
+networks:
+  netscope-network:
+    driver: bridge
